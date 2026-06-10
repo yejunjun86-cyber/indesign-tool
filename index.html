@@ -1,0 +1,1907 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Doc2JSX - 文档转 InDesign 排版脚本</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #222530;
+    --border: #2a2d3a;
+    --text: #e1e4ed;
+    --text2: #9498a8;
+    --accent: #6c8cff;
+    --accent2: #4a6cf7;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --radius: 10px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .logo { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo span { color: var(--accent); }
+  .badge {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  /* ── Layout ── */
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 960px) {
+    .container { grid-template-columns: 1fr; }
+  }
+
+  /* ── Panels ── */
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+  }
+  .panel-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-title .icon { font-size: 18px; }
+
+  /* ── Upload Zone ── */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(108, 140, 255, 0.05);
+  }
+  .upload-zone .icon { font-size: 40px; margin-bottom: 12px; }
+  .upload-zone p { color: var(--text2); font-size: 14px; }
+  .upload-zone .or { margin: 8px 0; font-size: 12px; color: var(--text2); }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-small { padding: 4px 12px; font-size: 12px; }
+  .btn-green { background: var(--green); color: #0f1117; }
+  .btn-green:hover { opacity: 0.9; }
+
+  .file-info {
+    display: none;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--card2);
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .file-info.visible { display: block; }
+  .file-info .name { font-weight: 600; color: var(--accent); }
+  .file-info .meta { color: var(--text2); font-size: 12px; margin-top: 4px; }
+
+  /* ── Preset ── */
+  .preset-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .preset-bar select {
+    background: var(--input-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    min-width: 160px;
+  }
+  .preset-bar .btn { font-size: 11px; padding: 5px 12px; }
+
+  /* ── Config ── */
+  .config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .config-group { margin-bottom: 12px; }
+  .config-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text2);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .config-group input, .config-group select {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--font);
+  }
+  .config-group input:focus, .config-group select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .config-group .unit { color: var(--text2); font-size: 11px; margin-left: 4px; }
+
+  /* ── Style Mapping ── */
+  .style-map { margin-bottom: 16px; }
+  .style-map label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text2);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .style-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .style-row .keyword {
+    flex: 1;
+    padding: 6px 10px;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+  }
+  .style-row .arrow { color: var(--text2); font-size: 14px; }
+  .style-row .style-name {
+    flex: 1;
+    padding: 6px 10px;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--accent);
+    font-size: 13px;
+    font-family: var(--mono);
+  }
+  .style-row .btn-small { flex-shrink: 0; }
+  .add-style {
+    font-size: 12px;
+    color: var(--accent);
+    cursor: pointer;
+    margin-top: 6px;
+    display: inline-block;
+  }
+  .add-style:hover { text-decoration: underline; }
+
+  /* ── Output ── */
+  .output-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .output-stats {
+    font-size: 12px;
+    color: var(--text2);
+    display: flex;
+    gap: 16px;
+  }
+  .output-stats .stat { display: flex; align-items: center; gap: 4px; }
+  .output-stats .val { color: var(--accent); font-weight: 600; }
+
+  .code-container {
+    position: relative;
+    background: #0a0c14;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .code-container pre {
+    margin: 0;
+    padding: 20px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    max-height: 600px;
+    overflow-y: auto;
+    tab-size: 2;
+    white-space: pre;
+  }
+  .code-container code { color: #e1e4ed; }
+  .line-numbers {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 44px;
+    background: rgba(255,255,255,0.03);
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    text-align: right;
+    font-size: 11px;
+    color: var(--text2);
+    user-select: none;
+  }
+  .line-numbers span { display: block; padding-right: 10px; line-height: 1.7; }
+
+  .copy-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+  }
+  .copied { background: var(--green) !important; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 999;
+    animation: fadeInUp 0.3s ease;
+  }
+  .toast.success { background: var(--green); color: #0f1117; }
+  .toast.error { background: var(--red); color: #fff; }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  /* ── Empty State ── */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text2);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+  .empty-state p { font-size: 14px; }
+
+  /* ── Tab Navigation ── */
+  .tab-nav {
+    display: flex;
+    gap: 0;
+    margin-bottom: 16px;
+    border-bottom: 2px solid var(--border);
+  }
+  .tab-btn {
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text2);
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-content { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .tab-content.active { display: flex; }
+
+  /* ── Preview: Exam Paper ── */
+  .preview-container {
+    flex: 1;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0;
+    position: relative;
+  }
+  .preview-page {
+    background: transparent;
+    margin: 0 0 28px 0;
+    position: relative;
+  }
+  .preview-page:last-child { margin-bottom: 0; }
+  .page-number {
+    text-align: center;
+    font-size: 11px;
+    color: #aaa;
+    padding: 8px 0 4px;
+    letter-spacing: 1px;
+  }
+  .preview-columns {
+    display: flex;
+    position: absolute;
+    gap: 0;
+  }
+  .preview-col {
+    padding: 16px 12px;
+    line-height: 1.85;
+    font-size: 13px;
+    color: #1a1a1a;
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Serif CJK SC", "SimSun", serif;
+    vertical-align: top;
+    box-sizing: border-box;
+  }
+  .preview-col + .preview-col {
+    border-left: none; /* border handled by gutter */
+  }
+
+  /* ── Preview: paragraph styles ── */
+  .pv-item { margin: 0; padding: 0; position: relative; word-break: break-all; text-align: justify; }
+  .pv-empty { height: 1em; }
+  .pv-style-title { font-size: 22px; font-weight: 700; text-align: center; padding: 6px 0 12px; letter-spacing: 2px; }
+  .pv-style-unit  { font-size: 16px; font-weight: 700; text-align: center; padding: 6px 0 10px; }
+  .pv-style-time  { font-size: 13px; text-align: center; color: #555; padding: 2px 0 8px; }
+  .pv-style-section { font-size: 14px; font-weight: 700; padding: 8px 0 4px; }
+  .pv-style-question { font-size: 13px; font-weight: 600; padding: 6px 0 2px; }
+  .pv-style-option { font-size: 13px; padding: 1px 0 1px 16px; }
+  .pv-style-subq { font-size: 13px; padding: 1px 0 1px 24px; }
+  .pv-style-notice { font-size: 12px; text-align: center; padding: 2px 0; color: #333; }
+  .pv-style-default { font-size: 13px; }
+  .pv-style-week { font-size: 20px; font-weight: 700; text-align: center; padding: 8px 0 12px; letter-spacing: 2px; }
+
+  /* ── Preview: special markers ── */
+  .pv-indent-here {
+    display: inline-block;
+    width: 0;
+    position: relative;
+  }
+  .pv-indent-here::before {
+    content: "";
+    position: absolute;
+    left: -8px;
+    top: 2px;
+    bottom: 2px;
+    width: 1px;
+    background: #6c8cff;
+    opacity: 0.5;
+  }
+  .pv-right-tab {
+    display: inline-block;
+    width: 0;
+  }
+  .pv-right-tab::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    width: 4px;
+    height: 1em;
+    border-right: 1px dashed #f87171;
+    opacity: 0.6;
+  }
+  .pv-img-placeholder {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #f0f4ff;
+    border: 1px dashed #6c8cff;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #6c8cff;
+    margin: 4px 0;
+    cursor: default;
+  }
+  .pv-img-placeholder::before {
+    content: "🖼 ";
+  }
+  .pv-img-placeholder.full {
+    display: block;
+    text-align: center;
+    padding: 20px;
+    margin: 8px 0;
+    font-size: 13px;
+  }
+  .pv-style-badge {
+    display: inline-block;
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 6px;
+    opacity: 0.7;
+    vertical-align: middle;
+  }
+  .pv-rubric {
+    border-bottom: 1px solid #000;
+    display: inline-block;
+    min-width: 60px;
+    text-align: center;
+  }
+
+  /* ── Preview toolbar ── */
+  .preview-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+  .preview-toolbar .btn-small { font-size: 12px; }
+  .zoom-slider {
+    width: 80px;
+    accent-color: var(--accent);
+  }
+  .zoom-label { font-size: 12px; color: var(--text2); min-width: 36px; }
+
+  /* ── AI Enhance Toggle ── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .toggle {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background: var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle.active { background: var(--accent); }
+  .toggle::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s;
+  }
+  .toggle.active::after { transform: translateX(20px); }
+  .toggle-label { font-size: 13px; color: var(--text2); }
+  .toggle-label strong { color: var(--text); }
+
+  /* ── Instructions ── */
+  .instructions {
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: var(--card2);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .instructions ul { padding-left: 16px; }
+  .instructions li { margin-bottom: 4px; }
+  .instructions code {
+    background: rgba(108,140,255,0.15);
+    color: var(--accent);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📄 Doc<span>2</span>JSX</div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <span class="badge">InDesign ExtendScript</span>
+    <span style="font-size:13px;color:var(--text2);">Markdown / TXT → JSX</span>
+  </div>
+</header>
+
+<div class="container">
+  <!-- ====== 左栏：输入区 ====== -->
+  <div>
+    <!-- 上传区域 -->
+    <div class="panel" style="margin-bottom:24px;">
+      <div class="panel-title"><span class="icon">📤</span> 上传文档</div>
+      <div class="upload-zone" id="uploadZone">
+        <div class="icon">📁</div>
+        <p>拖拽 .md / .txt / .docx 文件到此处</p>
+        <p class="or">— 或 —</p>
+        <div style="display:flex;gap:8px;justify-content:center;">
+          <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">选择文件</button>
+          <button class="btn btn-outline" onclick="loadSample('示例-专项卷二.md')" style="font-size:12px;">📄 示例一</button>
+          <button class="btn btn-outline" onclick="loadSample('周末小测卷语文四年级.md')" style="font-size:12px;">📄 示例二</button>
+        </div>
+        <input type="file" id="fileInput" accept=".md,.txt,.markdown,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="handleFileSelect(this.files[0])">
+      </div>
+      <div class="file-info" id="fileInfo">
+        <div class="name" id="fileName"></div>
+        <div class="meta" id="fileMeta"></div>
+      </div>
+    </div>
+
+    <!-- 配置区域 -->
+    <div class="panel" style="margin-bottom:24px;">
+      <div class="preset-bar">
+        <span class="icon">⚙️</span>
+        <span style="font-weight:700;font-size:15px;">脚本配置</span>
+        <span style="flex:1;"></span>
+        <select id="presetSelect" onchange="loadPreset(this.value)">
+          <option value="">— 选择预设 —</option>
+        </select>
+        <button class="btn btn-outline" onclick="saveCurrentAsPreset()">💾 保存</button>
+        <button class="btn btn-red" onclick="deleteCurrentPreset()">🗑</button>
+      </div>
+
+      <div class="config-group">
+        <label>模板文件路径</label>
+        <input type="text" id="cfgTemplatePath" value="/Users/tal/Desktop/叶珺珺/2026/4月/AI自动化排版/语文周末专项卷-三上-专项卷.indd" placeholder=".indd 模板绝对路径">
+      </div>
+
+      <div class="config-grid">
+        <div class="config-group">
+          <label>左栏 X <span class="unit">(pt)</span></label>
+          <input type="number" id="cfgLeftX" value="99.2" step="0.1">
+        </div>
+        <div class="config-group">
+          <label>左栏 Y <span class="unit">(pt)</span></label>
+          <input type="number" id="cfgLeftY" value="68.0" step="0.1">
+        </div>
+        <div class="config-group">
+          <label>左栏 宽度 <span class="unit">(pt)</span></label>
+          <input type="number" id="cfgLeftW" value="496.1" step="0.1">
+        </div>
+        <div class="config-group">
+          <label>左栏 高度 <span class="unit">(pt)</span></label>
+          <input type="number" id="cfgLeftH" value="714.3" step="0.1">
+        </div>
+        <div class="config-group">
+          <label>右栏 X <span class="unit">(pt)</span></label>
+          <input type="number" id="cfgRightX" value="652.0" step="0.1">
+        </div>
+        <div class="config-group">
+          <label>右栏 Y <span class="unit">(pt)</span></label>
+          <input type="number" id="cfgRightY" value="68.0" step="0.1">
+        </div>
+        <div class="config-group">
+          <label>右栏 宽度 <span class="unit">(pt)</span></label>
+          <input type="number" id="cfgRightW" value="496.1" step="0.1">
+        </div>
+        <div class="config-group">
+          <label>右栏 高度 <span class="unit">(pt)</span></label>
+          <input type="number" id="cfgRightH" value="714.3" step="0.1">
+        </div>
+      </div>
+
+      <div class="config-group">
+        <label>默认段落样式</label>
+        <input type="text" id="cfgDefaultStyle" value="基准">
+      </div>
+
+      <div class="config-group">
+        <label>脚本标题</label>
+        <input type="text" id="cfgScriptTitle" value="自动排版" placeholder="例如：专项卷（二）">
+      </div>
+    </div>
+
+    <!-- 样式映射 -->
+    <div class="panel">
+      <div class="panel-title"><span class="icon">🔗</span> 关键词 → 样式映射</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+        根据文档中的关键词自动匹配 InDesign 段落样式
+      </p>
+
+      <div id="styleMappings">
+        <!-- 动态生成 -->
+      </div>
+
+      <span class="add-style" onclick="addStyleRow()">+ 添加映射</span>
+
+      <!-- AI 增强开关 -->
+      <div class="toggle-row" style="margin-top:16px;">
+        <div class="toggle active" id="aiToggle" onclick="toggleAI()"></div>
+        <span class="toggle-label"><strong>AI 智能增强</strong> — 自动识别段落语义并优化样式匹配</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== 右栏：输出区 ====== -->
+  <div>
+    <div class="panel" style="height: calc(100vh - 140px); display: flex; flex-direction: column;">
+      <!-- Tab Navigation -->
+      <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('code')" id="tabCode">💻 JSX 代码</button>
+        <button class="tab-btn" onclick="switchTab('preview')" id="tabPreview">👁 排版预览</button>
+      </div>
+
+      <!-- Tab: Code -->
+      <div class="tab-content active" id="tabContentCode">
+        <div class="output-header">
+          <div class="panel-title" style="margin-bottom:0;"><span class="icon">📝</span> 生成的 JSX 脚本</div>
+          <div class="output-stats">
+            <span class="stat">行数 <span class="val" id="lineCount">0</span></span>
+            <span class="stat">条目 <span class="val" id="itemCount">0</span></span>
+          </div>
+        </div>
+
+        <div class="code-container" style="flex:1; display:flex;">
+          <pre id="codeOutput"><code><span class="empty-state"><span class="icon">📋</span><p>上传文档后，生成的 JSX 脚本将在此显示</p></span></code></pre>
+        </div>
+      </div>
+
+      <!-- Tab: Preview -->
+      <div class="tab-content" id="tabContentPreview">
+        <div class="preview-toolbar">
+          <span style="font-size:13px;font-weight:600;color:var(--text);">📄 试卷预览</span>
+          <span style="flex:1;"></span>
+          <span class="zoom-label" id="zoomLabel">100%</span>
+          <input type="range" class="zoom-slider" id="zoomSlider" min="40" max="150" value="100" oninput="updateZoom(this.value)">
+          <span class="stat" style="margin-left:12px;">页数 <span class="val" id="pageCount">0</span></span>
+        </div>
+
+        <div class="preview-container" id="previewContainer">
+          <div class="empty-state">
+            <span class="icon">👁</span>
+            <p>上传文档后，排版预览将在此显示</p>
+            <p style="font-size:12px;margin-top:4px;">预览模拟 InDesign 双栏排版效果</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom buttons -->
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn btn-primary" id="btnGenerate" onclick="generateScript()" disabled>⚡ 生成脚本</button>
+        <button class="btn btn-outline" id="btnCopy" onclick="copyCode()" disabled>📋 复制</button>
+        <button class="btn btn-green" id="btnDownload" onclick="downloadScript()" disabled>⬇ 下载 .jsx</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="instructions" style="max-width:1400px;margin:0 auto 32px;padding:16px 24px;">
+  <strong style="font-size:13px;">📖 文档格式说明</strong>
+  <ul style="margin-top:8px;">
+    <li>使用 Markdown 标题（<code># 标题</code>、<code>## 子标题</code>）标记试卷结构</li>
+    <li>使用 <code>**粗体**</code> 或 <code>__粗体__</code> 标记题目文本</li>
+    <li>用 <code>- </code> 或 <code>1. </code> 列表标记题目选项</li>
+    <li>使用 <code>[图片:path/to/image.png]</code> 标记内嵌图片位置</li>
+    <li>使用 <code>[缩进]</code> 标记 Indent to Here 位置</li>
+    <li>使用 <code>[右对齐]</code> 标记 Right Indent Tab 位置</li>
+    <li>纯文本行会自动按关键词匹配段落样式</li>
+  </ul>
+</div>
+
+<script>
+// ============================================================
+// Built-in Presets
+// ============================================================
+const BUILTIN_PRESETS = {
+  '三上-专项卷': {
+    templatePath: '/Users/tal/Desktop/叶珺珺/2026/4月/AI自动化排版/语文周末专项卷-三上-专项卷.indd',
+    leftX: 99.2, leftY: 68.0, leftW: 496.1, leftH: 714.3,
+    rightX: 652.0, rightY: 68.0, rightW: 496.1, rightH: 714.3,
+    defaultStyle: '基准',
+    scriptTitle: '自动排版'
+  },
+  '四上-小测卷': {
+    templatePath: '/Users/tal/Desktop/叶珺珺/2026/4月/AI自动化排版/语文周末小测卷-四上.indd',
+    leftX: 35, leftY: 24, leftW: 175, leftH: 252,
+    rightX: 230, rightY: 24, rightW: 175, rightH: 252,
+    defaultStyle: '基准',
+    scriptTitle: '四上小测卷'
+  }
+};
+
+function getAllPresets() {
+  const custom = JSON.parse(localStorage.getItem('doc2jsx_presets') || '{}');
+  return { ...BUILTIN_PRESETS, ...custom };
+}
+
+function populatePresetSelect() {
+  const sel = document.getElementById('presetSelect');
+  const currentVal = sel.value;
+  sel.innerHTML = '<option value="">— 选择预设 —</option>';
+  const all = getAllPresets();
+  for (const name in all) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+  sel.value = currentVal;
+}
+
+function loadPreset(name) {
+  if (!name) return;
+  const all = getAllPresets();
+  const p = all[name];
+  if (!p) return;
+
+  document.getElementById('cfgTemplatePath').value = p.templatePath;
+  document.getElementById('cfgLeftX').value = p.leftX;
+  document.getElementById('cfgLeftY').value = p.leftY;
+  document.getElementById('cfgLeftW').value = p.leftW;
+  document.getElementById('cfgLeftH').value = p.leftH;
+  document.getElementById('cfgRightX').value = p.rightX;
+  document.getElementById('cfgRightY').value = p.rightY;
+  document.getElementById('cfgRightW').value = p.rightW;
+  document.getElementById('cfgRightH').value = p.rightH;
+  document.getElementById('cfgDefaultStyle').value = p.defaultStyle;
+  document.getElementById('cfgScriptTitle').value = p.scriptTitle;
+
+  showToast('已加载预设: ' + name, 'success');
+}
+
+function getCurrentConfig() {
+  return {
+    templatePath: document.getElementById('cfgTemplatePath').value,
+    leftX: parseFloat(document.getElementById('cfgLeftX').value) || 0,
+    leftY: parseFloat(document.getElementById('cfgLeftY').value) || 0,
+    leftW: parseFloat(document.getElementById('cfgLeftW').value) || 0,
+    leftH: parseFloat(document.getElementById('cfgLeftH').value) || 0,
+    rightX: parseFloat(document.getElementById('cfgRightX').value) || 0,
+    rightY: parseFloat(document.getElementById('cfgRightY').value) || 0,
+    rightW: parseFloat(document.getElementById('cfgRightW').value) || 0,
+    rightH: parseFloat(document.getElementById('cfgRightH').value) || 0,
+    defaultStyle: document.getElementById('cfgDefaultStyle').value,
+    scriptTitle: document.getElementById('cfgScriptTitle').value
+  };
+}
+
+function saveCurrentAsPreset() {
+  const name = prompt('给当前配置起个名字:');
+  if (!name || !name.trim()) return;
+  const key = name.trim();
+  if (BUILTIN_PRESETS[key]) {
+    showToast('不能覆盖内置预设: ' + key, 'error');
+    return;
+  }
+  const custom = JSON.parse(localStorage.getItem('doc2jsx_presets') || '{}');
+  custom[key] = getCurrentConfig();
+  localStorage.setItem('doc2jsx_presets', JSON.stringify(custom));
+  populatePresetSelect();
+  document.getElementById('presetSelect').value = key;
+  showToast('已保存预设: ' + key, 'success');
+}
+
+function deleteCurrentPreset() {
+  const sel = document.getElementById('presetSelect');
+  const name = sel.value;
+  if (!name) {
+    showToast('请先选择一个自定义预设', 'error');
+    return;
+  }
+  if (BUILTIN_PRESETS[name]) {
+    showToast('不能删除内置预设: ' + name, 'error');
+    return;
+  }
+  if (!confirm('确定删除预设 "' + name + '" ?')) return;
+  const custom = JSON.parse(localStorage.getItem('doc2jsx_presets') || '{}');
+  delete custom[name];
+  localStorage.setItem('doc2jsx_presets', JSON.stringify(custom));
+  populatePresetSelect();
+  sel.value = '';
+  showToast('已删除预设: ' + name, 'success');
+}
+
+// ============================================================
+// State
+// ============================================================
+let currentFile = null;
+let currentFileContent = '';
+let aiEnabled = true;
+let styleMappings = [
+  { keyword: '第一单元', style: '【第一单元】' },
+  { keyword: '第二单元', style: '【第二单元】' },
+  { keyword: '第三单元', style: '【第三单元】' },
+  { keyword: '时间：', style: '时间：' },
+  { keyword: '一、', style: '一、' },
+  { keyword: '二、', style: '二、' },
+  { keyword: '三、', style: '三、' },
+  { keyword: '四、', style: '四、' },
+  { keyword: '题选项', style: '题选项' },
+  { keyword: '缩进', style: '缩进0' },
+  { keyword: '通知', style: '通知' },
+  { keyword: '第1周', style: '第1周' },
+  { keyword: '第2周', style: '第2周' },
+  { keyword: '第3周', style: '第3周' },
+];
+
+// ============================================================
+// Render style mappings
+// ============================================================
+function renderStyleMappings() {
+  const container = document.getElementById('styleMappings');
+  container.innerHTML = styleMappings.map((m, i) => `
+    <div class="style-row">
+      <input class="keyword" value="${escapeHtml(m.keyword)}" placeholder="关键词" onchange="updateStyleMap(${i}, 'keyword', this.value)">
+      <span class="arrow">→</span>
+      <input class="style-name" value="${escapeHtml(m.style)}" placeholder="样式名" onchange="updateStyleMap(${i}, 'style', this.value)">
+      <button class="btn btn-outline btn-small" onclick="removeStyleRow(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function addStyleRow() {
+  styleMappings.push({ keyword: '', style: '' });
+  renderStyleMappings();
+}
+
+function removeStyleRow(index) {
+  styleMappings.splice(index, 1);
+  renderStyleMappings();
+}
+
+function updateStyleMap(index, field, value) {
+  styleMappings[index][field] = value;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+renderStyleMappings();
+populatePresetSelect();
+
+// ============================================================
+// AI Toggle
+// ============================================================
+function toggleAI() {
+  aiEnabled = !aiEnabled;
+  document.getElementById('aiToggle').classList.toggle('active', aiEnabled);
+}
+
+// ============================================================
+// File handling
+// ============================================================
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  uploadZone.classList.add('drag-over');
+});
+
+uploadZone.addEventListener('dragleave', () => {
+  uploadZone.classList.remove('drag-over');
+});
+
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFileSelect(file);
+});
+
+uploadZone.addEventListener('click', (e) => {
+  // Only trigger if click is on the zone itself, not the button inside it
+  if (e.target === uploadZone || e.target.classList.contains('icon') || e.target.tagName === 'P') {
+    fileInput.click();
+  }
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleFileSelect(fileInput.files[0]);
+});
+
+function handleFileSelect(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['md', 'txt', 'markdown', 'docx'].includes(ext)) {
+    showToast('请上传 .md / .txt / .docx 文件', 'error');
+    return;
+  }
+
+  currentFile = file;
+
+  if (ext === 'docx') {
+    // Parse docx with JSZip
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      JSZip.loadAsync(e.target.result).then((zip) => {
+        return zip.file('word/document.xml').async('string');
+      }).then((xmlStr) => {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlStr, 'text/xml');
+        const paras = xmlDoc.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'p');
+        const lines = [];
+        for (let i = 0; i < paras.length; i++) {
+          const texts = paras[i].getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 't');
+          let line = '';
+          for (let j = 0; j < texts.length; j++) {
+            if (texts[j].textContent) line += texts[j].textContent;
+          }
+          lines.push(line);
+        }
+        currentFileContent = lines.join('\n');
+        finishFileLoad(file, ext);
+      }).catch((err) => {
+        showToast('解析 .docx 失败: ' + err.message, 'error');
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      currentFileContent = e.target.result;
+      finishFileLoad(file, ext);
+    };
+    reader.readAsText(file);
+  }
+}
+
+function finishFileLoad(file, ext) {
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileMeta').textContent =
+    '大小: ' + formatSize(file.size) + ' · 类型: ' + ext.toUpperCase();
+  document.getElementById('fileInfo').classList.add('visible');
+  document.getElementById('btnGenerate').disabled = false;
+  generateScript();
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// Load bundled sample document
+async function loadSample(filename) {
+  try {
+    const resp = await fetch(filename);
+    if (!resp.ok) throw new Error('Sample file not found');
+    const text = await resp.text();
+    currentFileContent = text;
+    document.getElementById('fileName').textContent = filename + ' (内置示例)';
+    document.getElementById('fileMeta').textContent = '大小: ' + formatSize(text.length) + ' · 类型: ' + filename.split('.').pop().toUpperCase();
+    document.getElementById('fileInfo').classList.add('visible');
+    document.getElementById('btnGenerate').disabled = false;
+    generateScript();
+    showToast('✅ 已加载示例: ' + filename, 'success');
+  } catch (err) {
+    showToast('加载示例失败: ' + err.message, 'error');
+  }
+}
+
+// ============================================================
+// Parser: Markdown/TXT → contentFlow items
+// ============================================================
+function parseDocument(text) {
+  const lines = text.split('\n');
+  const items = [];
+  let imageCounter = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    let raw = lines[i];
+    let trimmed = raw.trim();
+
+    // Skip empty lines (they become empty items for spacing)
+    if (trimmed === '') {
+      items.push({ text: '', style: null });
+      continue;
+    }
+
+    let text = trimmed;
+    let style = null;
+
+    // Handle Markdown headings
+    const headingMatch = text.match(/^#{1,3}\s+(.+)/);
+    if (headingMatch) {
+      text = headingMatch[1];
+      // Try to match heading to a style
+      style = matchStyle(text);
+      if (!style) {
+        // Fallback: headings map to 一、style or 【xxx】 based on content
+        if (text.includes('单元')) {
+          style = '【第一单元】';
+        } else if (/^[一二三四五六七八九十]、/.test(text)) {
+          style = '一、';
+        } else {
+          style = '第1周';
+        }
+      }
+      items.push({ text: text, style: style });
+      continue;
+    }
+
+    // Handle image markers: [图片:path]
+    const imgMatch = text.match(/^\[图片:(.+?)\]$/);
+    if (imgMatch) {
+      imageCounter++;
+      const imgPath = imgMatch[1].trim();
+      text = `//图片:///${imgPath}//`;
+      style = null;
+      items.push({ text: text, style: style });
+      continue;
+    }
+
+    // Handle inline image markers
+    if (text.includes('[图片:')) {
+      text = text.replace(/\[图片:(.+?)\]/g, (m, p) => {
+        imageCounter++;
+        return `//图片:///${p.trim()}//`;
+      });
+    }
+
+    // Handle indent markers: [缩进]
+    if (text.includes('[缩进]')) {
+      text = text.replace(/\[缩进\]/g, '//Cmd+\\\\//');
+    }
+
+    // Handle right indent markers: [右对齐]
+    if (text.includes('[右对齐]')) {
+      text = text.replace(/\[右对齐\]/g, '//Shift+Tab//');
+    }
+
+    // Handle em-space markers
+    if (text.includes('[全角空格]')) {
+      text = text.replace(/\[全角空格\]/g, '//Shift+Cmd+M//');
+    }
+
+    // Handle list items (- item or 1. item)
+    const listMatch = text.match(/^[-*]\s+(.+)/);
+    if (listMatch) {
+      text = listMatch[1];
+      style = matchStyle(text) || '缩进0';
+      items.push({ text: text, style: style });
+      continue;
+    }
+
+    const numListMatch = text.match(/^\d+[\.\、]\s*(.+)/);
+    if (numListMatch && !/^[一二三四五六七八九十]、/.test(text)) {
+      text = numListMatch[1];
+      style = matchStyle(text) || '缩进0';
+      items.push({ text: text, style: style });
+      continue;
+    }
+
+    // Handle bracket options: A．xxx / B．xxx
+    if (/^[A-D][．\.]\s*.+/.test(text)) {
+      style = matchStyle(text) || '缩进0';
+      items.push({ text: text, style: style });
+      continue;
+    }
+
+    // Handle sub-questions: （1）xxx / (1) xxx
+    if (/^[（(]\d+[）)]\s*/.test(text)) {
+      style = matchStyle(text) || '缩进0';
+      items.push({ text: text, style: style });
+      continue;
+    }
+
+    // Try to match style by keywords
+    style = matchStyle(text);
+    if (!style) {
+      // AI enhancement: guess style based on context
+      if (aiEnabled) {
+        style = aiGuessStyle(text, items);
+      }
+    }
+
+    items.push({ text: text, style: style });
+  }
+
+  return items;
+}
+
+function matchStyle(text) {
+  for (const mapping of styleMappings) {
+    if (!mapping.keyword) continue;
+    if (text.includes(mapping.keyword)) {
+      return mapping.style;
+    }
+  }
+  return null;
+}
+
+function aiGuessStyle(text, previousItems) {
+  // Smart defaults based on text patterns
+  if (/^\d+[\.\、]/.test(text) && text.length > 10) return '题选项';
+  if (/^[A-D][．\.]/.test(text)) return '缩进0';
+  if (/^[（(]\d+[）)]/.test(text)) return '缩进0';
+  if (text.includes('时间') && text.includes('分钟')) return '时间：';
+  if (/^[一二三四五六七八九十]、/.test(text)) return '一、';
+  if (text.includes('单元')) return '【第一单元】';
+  if (text.includes('通知')) return '通知';
+  return null;
+}
+
+// ============================================================
+// Generator: contentFlow → JSX
+// ============================================================
+function generateJSX(items) {
+  const cfg = getConfig();
+  const title = cfg.scriptTitle || '自动排版';
+
+  let jsx = `// =============================================================================
+// ${title} · 自动化排版
+// 数据驱动的可复用 JSX 脚本 — 由 Doc2JSX 生成
+// 生成时间: ${new Date().toLocaleString('zh-CN')}
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// 0. 配置区 —— 集中修改这里即可适配不同试卷
+// ---------------------------------------------------------------------------
+var CONFIG = {
+    // 模板文件路径（相对脚本位置或绝对路径）
+    templatePath: "${escapeJS(cfg.templatePath)}",
+
+    // 文本框参数（单位：pt）：每页左栏 / 右栏（同页双栏，内容从左栏流入右栏）
+    frameLeft:  { x: ${cfg.leftX},  y: ${cfg.leftY}, w: ${cfg.leftW}, h: ${cfg.leftH}, label: "左栏" },
+    frameRight: { x: ${cfg.rightX}, y: ${cfg.rightY}, w: ${cfg.rightW}, h: ${cfg.rightH}, label: "右栏" },
+
+    // 默认段落样式
+    defaultStyle: "${escapeJS(cfg.defaultStyle)}"
+};
+
+// ---------------------------------------------------------------------------
+// 1. 内容数据 —— 将排版流程抽象为纯数据结构，方便复用
+//    每条: { text: "...", style: "样式名"|null }
+//    text 中可使用标记:
+//      //Cmd+\\//      → Indent to Here（在此缩进对齐符）
+//      //Shift+Tab//  → Right Indent Tab（右对齐制表符）
+//      //Shift+Cmd+M//  → Em Space（全角空格）
+//      //图片:///path// → 内嵌图片
+//    style 为 null 时使用 CONFIG.defaultStyle
+// ---------------------------------------------------------------------------
+var contentFlow = [
+`;
+
+  // Generate contentFlow items
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const textStr = escapeJS(item.text);
+    const styleStr = item.style ? `"${escapeJS(item.style)}"` : 'null';
+
+    // Add comment for section headers
+    if (item.style === '【第一单元】' || item.style === '一、' || item.style === '二、' ||
+        item.style === '三、' || item.style === '四、' || item.style === '题选项') {
+      jsx += `    // ---- ${item.text.substring(0, 20)} ----\n`;
+    }
+
+    jsx += `    { text: "${textStr}",${' '.repeat(Math.max(0, 45 - textStr.length))}style: ${styleStr} }`;
+
+    // Don't add comma on last item
+    if (i < items.length - 1) {
+      jsx += ',';
+    }
+    jsx += '\n';
+  }
+
+  jsx += `];
+
+// ---------------------------------------------------------------------------
+// 2. 核心函数 —— 智能插入，处理所有特殊标记
+// ---------------------------------------------------------------------------
+
+/**
+ * insertSmart(story, item)
+ * 解析 item.text 中的特殊标记并逐段插入到 story 末尾，
+ * 然后应用 item.style 指定的段落样式。
+ *
+ * 支持的标记:
+ *   //Cmd+\\//      → Indent Here Tab
+ *   //Shift+Tab//  → Right Indent Tab
+ *   //Shift+Cmd+M//  → Em Space (全角空格)
+ *   //图片:///path// → 内嵌图片（支持 png/jpg/jpeg/gif/tiff）
+ *
+ * 注意: 样式在插入 \\r 之前应用到当前段落，确保作用在正确段落上。
+ *       style 为 null 时不应用样式（让段落继承前一段样式或文本框默认）。
+ */
+function insertSmart(story, item) {
+    if (!story || !story.isValid) return;
+
+    var text      = item.text;
+    var styleName = item.style;
+
+    // 空文本 = 空段落，只插入换行，不应用样式（继承前一段）
+    if (text === "") {
+        story.insertionPoints[-1].contents = "\\r";
+        return;
+    }
+
+    // 正则匹配所有标记
+    var markerRegex = /\\/\\/Cmd\\+\\\\\\/\\/|\\/\\/Shift\\+Tab\\/\\/|\\/\\/Shift\\+Cmd\\+M\\/\\/|\\/\\/图片:\\/{3}.+?\\.(?:png|jpg|jpeg|gif|tiff?)\\//g;
+    var lastIndex  = 0;
+    var match;
+
+    while ((match = markerRegex.exec(text)) !== null) {
+        // -- 插入标记前的纯文本 --
+        if (match.index > lastIndex) {
+            var textBefore = text.substring(lastIndex, match.index);
+            if (textBefore.length > 0) {
+                story.insertionPoints[-1].contents = textBefore;
+            }
+        }
+
+        // -- 处理标记 --
+        var marker = match[0];
+
+        if (marker === "//Cmd+\\\\//") {
+            // Indent to Here
+            story.insertionPoints[-1].contents = SpecialCharacters.INDENT_HERE_TAB;
+
+        } else if (marker === "//Shift+Tab//") {
+            // Right Indent Tab
+            story.insertionPoints[-1].contents = SpecialCharacters.rightIndentTab;
+
+        } else if (marker === "//Shift+Cmd+M//") {
+            // Em Space（全角空格）
+            story.insertionPoints[-1].contents = SpecialCharacters.emSpace;
+
+        } else if (marker.indexOf("//图片:///") === 0) {
+            // 内嵌图片
+            var imgPath = marker.replace("//图片:///", "").replace(/\\/$/, "");
+            try {
+                var imgFile = File(imgPath);
+                if (imgFile.exists) {
+                    story.insertionPoints[-1].place(imgFile);
+                } else {
+                    story.insertionPoints[-1].contents = "[图片缺失: " + decodeURI(imgFile.name) + "]";
+                }
+            } catch (e) {
+                story.insertionPoints[-1].contents = "[图片错误]";
+            }
+        }
+
+        lastIndex = markerRegex.lastIndex;
+    }
+
+    // -- 插入剩余文字 --
+    if (lastIndex < text.length) {
+        story.insertionPoints[-1].contents = text.substring(lastIndex);
+    }
+
+    // -- 先应用样式（此时 story.paragraphs[-1] 是当前内容段落） --
+    applyStyle(story, styleName);
+
+    // -- 再插入段落回车，结束当前段落 --
+    story.insertionPoints[-1].contents = "\\r";
+}
+
+/**
+ * applyStyle(story, styleName)
+ * 对 story 最后一个段落应用指定样式，并强制清零段前/段后间距。
+ */
+function applyStyle(story, styleName) {
+    try {
+        var lastPara = story.paragraphs[-1];
+        if (!lastPara || !lastPara.isValid) return;
+
+        if (styleName) {
+            lastPara.appliedParagraphStyle = styleName;
+        }
+
+        // 强制清零段前/段后间距，覆盖样式中的设置
+        lastPara.spaceBefore = 0;
+        lastPara.spaceAfter  = 0;
+    } catch (e) {
+        // 静默跳过
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 3. 主流程
+// ---------------------------------------------------------------------------
+
+function main() {
+    // --- 3.1 打开模板 ---
+    var doc;
+    try {
+        var tmplFile = File(CONFIG.templatePath);
+        if (!tmplFile.exists) {
+            alert("模板文件不存在:\\n" + CONFIG.templatePath, "错误");
+            return;
+        }
+        doc = app.open(tmplFile);
+    } catch (e) {
+        alert("打开模板失败:\\n" + e.toString(), "错误");
+        return;
+    }
+
+    // --- 3.2 页面尺寸检测（单位均为 pt） ---
+    var pageDimsPt = getPageDimensionsPt(doc);
+    var pageW_pt = pageDimsPt.width;
+    var pageH_pt = pageDimsPt.height;
+
+    var needW = Math.max(CONFIG.frameLeft.x + CONFIG.frameLeft.w, CONFIG.frameRight.x + CONFIG.frameRight.w);
+    var needH = Math.max(CONFIG.frameLeft.y + CONFIG.frameLeft.h, CONFIG.frameRight.y + CONFIG.frameRight.h);
+
+    if (pageW_pt < needW || pageH_pt < needH) {
+        var warnLines = [];
+        if (pageW_pt < needW) warnLines.push("· 页面宽度不足: 当前 " + pageW_pt.toFixed(1) + "pt, 需要≥" + needW.toFixed(1) + "pt");
+        if (pageH_pt < needH) warnLines.push("· 页面高度不足: 当前 " + pageH_pt.toFixed(1) + "pt, 需要≥" + needH.toFixed(1) + "pt");
+
+        var warnMsg = "⚠ 页面尺寸与文本框配置不匹配！\\n\\n" +
+                      "页面实测: " + pageW_pt.toFixed(1) + "pt × " + pageH_pt.toFixed(1) + "pt\\n" +
+                      "帧需求: 宽≥" + needW.toFixed(0) + "pt, 高≥" + needH.toFixed(0) + "pt" +
+                      " (左:" + (CONFIG.frameLeft.x + CONFIG.frameLeft.w).toFixed(0) + "pt, 右:" + (CONFIG.frameRight.x + CONFIG.frameRight.w).toFixed(0) + "pt)\\n\\n" +
+                      warnLines.join("\\n") + "\\n\\n" +
+                      "建议:\\n" +
+                      "  1. 检查模板页面尺寸是否足够容纳左右两栏\\n" +
+                      "  2. 或调整 CONFIG 中的 frameLeft/frameRight 坐标\\n\\n" +
+                      "是否继续运行？（文本框可能超出页面边界）";
+        if (!confirm(warnMsg)) {
+            doc.close(SaveOptions.NO);
+            return;
+        }
+    }
+
+    // --- 3.3 确保模板至少有2页 ---
+    while (doc.pages.length < 2) {
+        doc.pages.add();
+    }
+
+    // --- 3.4 获取或创建文本框并串联：每页左栏 → 右栏 → 下一页左栏 → … ---
+    var pageCount = doc.pages.length;
+    var firstFrame = null;
+    var prevFrame = null;
+
+    for (var p = 0; p < pageCount; p++) {
+        var page = doc.pages[p];
+
+        // 左栏
+        var leftFrame = getOrCreateFrameByCfg(page, CONFIG.frameLeft);
+        if (!firstFrame) firstFrame = leftFrame;
+        if (prevFrame) prevFrame.nextTextFrame = leftFrame;
+        prevFrame = leftFrame;
+
+        // 右栏
+        var rightFrame = getOrCreateFrameByCfg(page, CONFIG.frameRight);
+        prevFrame.nextTextFrame = rightFrame;
+        prevFrame = rightFrame;
+    }
+
+    // --- 3.5 获取 story 并清空旧内容 ---
+    var story = firstFrame.parentStory;
+    try {
+        if (story.characters.length > 0) {
+            story.characters.everyItem().remove();
+        }
+    } catch (e) { /* 空 story 时忽略 */ }
+
+    // --- 3.6 遍历内容数据，逐条插入 ---
+    for (var i = 0; i < contentFlow.length; i++) {
+        var item = contentFlow[i];
+        // 跳过纯空条目（text 为空且 style 为 null），避免多余空行
+        if (item.text === "" && item.style === null) continue;
+        insertSmart(story, item);
+    }
+
+    // --- 3.7 自动加页：内容溢出时，每次补一整页（左栏+右栏）---
+    while (story.overflows) {
+        var newPage = doc.pages.add();
+        var newLeft  = getOrCreateFrameByCfg(newPage, CONFIG.frameLeft);
+        var newRight = getOrCreateFrameByCfg(newPage, CONFIG.frameRight);
+        prevFrame.nextTextFrame = newLeft;
+        newLeft.nextTextFrame   = newRight;
+        prevFrame = newRight;
+    }
+
+    // --- 3.8 刷新视图 ---
+    doc.recompose();
+
+    alert(
+        "排版完成！\\n\\n" +
+        "试卷：${escapeJS(title)}\\n" +
+        "内容条目：" + contentFlow.length + " 条\\n" +
+        "总页数：" + doc.pages.length + " 页\\n" +
+        "页面尺寸：" + pageW_pt.toFixed(0) + "×" + pageH_pt.toFixed(0) + "pt\\n" +
+        "文本框：" + CONFIG.frameLeft.w.toFixed(0) + "×" + CONFIG.frameLeft.h.toFixed(0) + "pt" +
+        "（左:" + CONFIG.frameLeft.x.toFixed(0) + "pt / 右:" + CONFIG.frameRight.x.toFixed(0) + "pt）\\n\\n" +
+        "请保存文档。",
+        "完成"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 4. 工具函数
+// ---------------------------------------------------------------------------
+
+var POSITION_TOLERANCE = 5;
+
+function mmToPt(mm) { return mm * 2.834645669; }
+function ptToMm(pt) { return pt / 2.834645669; }
+
+function getPageDimensionsPt(doc) {
+    var page = doc.pages[0];
+    var testRect = page.rectangles.add();
+    testRect.geometricBounds = [0, 0, 99999, 99999];
+    var actual = testRect.geometricBounds;
+    var pageW = actual[3];
+    var pageH = actual[2];
+    testRect.remove();
+    return { width: pageW, height: pageH };
+}
+
+function toBounds(cfg) {
+    return [cfg.y, cfg.x, cfg.y + cfg.h, cfg.x + cfg.w];
+}
+
+function findFrameByLabel(page, label) {
+    if (!label) return null;
+    for (var i = 0; i < page.textFrames.length; i++) {
+        if (page.textFrames[i].label === label) return page.textFrames[i];
+    }
+    var allFrames = collectTextFramesFromContainer(page);
+    for (var j = 0; j < allFrames.length; j++) {
+        if (allFrames[j].label === label) return allFrames[j];
+    }
+    return null;
+}
+
+function findFrameByPosition(page, cfg) {
+    var expected = toBounds(cfg);
+    for (var i = 0; i < page.textFrames.length; i++) {
+        if (boundsMatch(page.textFrames[i].geometricBounds, expected)) return page.textFrames[i];
+    }
+    var allFrames = collectTextFramesFromContainer(page);
+    for (var j = 0; j < allFrames.length; j++) {
+        if (boundsMatch(allFrames[j].geometricBounds, expected)) return allFrames[j];
+    }
+    return null;
+}
+
+function boundsMatch(actual, expected) {
+    for (var k = 0; k < 4; k++) {
+        if (Math.abs(actual[k] - expected[k]) > POSITION_TOLERANCE) return false;
+    }
+    return true;
+}
+
+function collectTextFramesFromContainer(container) {
+    var result = [];
+    var items = container.allPageItems || container.pageItems || [];
+    for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (item instanceof TextFrame) {
+            result.push(item);
+        } else if (item instanceof Group) {
+            result = result.concat(collectTextFramesFromContainer(item));
+        }
+    }
+    return result;
+}
+
+function getOrCreateFrameByCfg(page, cfg) {
+    var label = cfg.label || "";
+    var frame = findFrameByLabel(page, label);
+    if (frame) {
+        frame.geometricBounds = toBounds(cfg);
+        return frame;
+    }
+    frame = findFrameByPosition(page, cfg);
+    if (frame) {
+        frame.label = label;
+        return frame;
+    }
+    frame = page.textFrames.add();
+    frame.geometricBounds = toBounds(cfg);
+    frame.label = label;
+    return frame;
+}
+
+// ---------------------------------------------------------------------------
+// 5. 入口
+// ---------------------------------------------------------------------------
+
+if (parseFloat(app.version) >= 6) {
+    app.doScript(main, ScriptLanguage.JAVASCRIPT, undefined, UndoModes.ENTIRE_SCRIPT, "${escapeJS(title)}");
+} else {
+    main();
+}
+`;
+
+  return jsx;
+}
+
+function escapeJS(str) {
+  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+}
+
+function getConfig() {
+  return {
+    templatePath: document.getElementById('cfgTemplatePath').value,
+    leftX: parseFloat(document.getElementById('cfgLeftX').value) || 99.2,
+    leftY: parseFloat(document.getElementById('cfgLeftY').value) || 68.0,
+    leftW: parseFloat(document.getElementById('cfgLeftW').value) || 496.1,
+    leftH: parseFloat(document.getElementById('cfgLeftH').value) || 714.3,
+    rightX: parseFloat(document.getElementById('cfgRightX').value) || 652.0,
+    rightY: parseFloat(document.getElementById('cfgRightY').value) || 68.0,
+    rightW: parseFloat(document.getElementById('cfgRightW').value) || 496.1,
+    rightH: parseFloat(document.getElementById('cfgRightH').value) || 714.3,
+    defaultStyle: document.getElementById('cfgDefaultStyle').value || '基准',
+    scriptTitle: document.getElementById('cfgScriptTitle').value || '自动排版',
+  };
+}
+
+// ============================================================
+// Actions
+// ============================================================
+let currentItems = [];  // store parsed items for preview
+
+function generateScript() {
+  if (!currentFileContent) {
+    showToast('请先上传文档', 'error');
+    return;
+  }
+
+  try {
+    currentItems = parseDocument(currentFileContent);
+    const jsx = generateJSX(currentItems);
+
+    document.getElementById('codeOutput').innerHTML =
+      `<code>${escapeHtml(jsx)}</code>`;
+    document.getElementById('lineCount').textContent = jsx.split('\n').length;
+    document.getElementById('itemCount').textContent = currentItems.length;
+    document.getElementById('btnCopy').disabled = false;
+    document.getElementById('btnDownload').disabled = false;
+
+    // Also render preview
+    renderPreview(currentItems);
+
+    showToast(`✅ 生成完成！共 ${currentItems.length} 条内容`, 'success');
+  } catch (err) {
+    showToast('生成失败: ' + err.message, 'error');
+  }
+}
+
+function copyCode() {
+  const code = document.getElementById('codeOutput').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    showToast('📋 已复制到剪贴板', 'success');
+  }).catch(() => {
+    showToast('复制失败，请手动选择复制', 'error');
+  });
+}
+
+function downloadScript() {
+  const code = document.getElementById('codeOutput').textContent;
+  const filename = (currentFile ? currentFile.name.replace(/\.[^.]+$/, '') : 'script') + '.jsx';
+  const blob = new Blob([code], { type: 'application/javascript' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`⬇ 已下载: ${filename}`, 'success');
+}
+
+function showToast(msg, type) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+
+  setTimeout(() => toast.remove(), 2500);
+}
+
+// ============================================================
+// Tab switching
+// ============================================================
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+  document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+  document.getElementById('tabContent' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+
+  // Re-render preview when switching to preview tab (in case config changed)
+  if (tab === 'preview' && currentItems.length > 0) {
+    renderPreview(currentItems);
+  }
+}
+
+// ============================================================
+// Zoom
+// ============================================================
+function updateZoom(value) {
+  document.getElementById('zoomLabel').textContent = value + '%';
+  const baseFS = 13;
+  const newFS = Math.round(baseFS * (value / 100));
+  document.querySelectorAll('.preview-col').forEach(col => {
+    col.style.fontSize = newFS + 'px';
+  });
+}
+
+// ============================================================
+// Preview Renderer: contentFlow items → HTML 双栏试卷 (自适应容器)
+// ============================================================
+function renderPreview(items) {
+  const container = document.getElementById('previewContainer');
+  const cfg = getConfig();
+
+  // Use a virtual unit system for pagination (based on InDesign pt)
+  // Then render to fill the actual container width
+  const VCOL_W = cfg.leftW;   // virtual column width in pt
+  const VCOL_H = cfg.leftH;   // virtual column height in pt
+
+  // Filter out pure null-style empty items
+  const filtered = items.filter(item => !(item.text === '' && item.style === null));
+
+  // Paginate using virtual units
+  const pages = paginateContent(filtered, VCOL_W, VCOL_H, 1.0);
+
+  document.getElementById('pageCount').textContent = pages.length;
+
+  // Get container width to calculate responsive scale
+  const containerW = container.clientWidth || 800;
+  const pagePadding = 32;
+  const availW = containerW - pagePadding * 2; // available width for content area
+  // Content area = right edge of right column (use gap between columns)
+  const colGap = (cfg.rightX - (cfg.leftX + cfg.leftW)); // gap in pt
+  const contentAreaW_pt = cfg.leftW * 2 + colGap;
+  // Scale to fit container
+  const SCALE = Math.min(availW / contentAreaW_pt, 2.0); // cap at 200%
+
+  const colW = cfg.leftW * SCALE;
+  const colH = VCOL_H * SCALE; // base height per page
+  const colGapPx = colGap * SCALE;
+
+  // Build HTML
+  let html = '';
+  pages.forEach((page, pi) => {
+    html += `<div class="preview-page" style="
+      width:100%;position:relative;
+      padding:${pagePadding}px;
+      box-sizing:border-box;
+    ">`;
+
+    // Column frame wrapper (both columns together with border)
+    html += `<div class="preview-frame" style="
+      display:flex;
+      border:2px solid #e0d8c8;border-radius:4px;
+      background:#fff;
+      overflow:hidden;
+      margin:0 auto;
+      position:relative;
+    " style="display:flex;">`;
+
+    // Left column
+    html += `<div class="preview-col" style="
+      width:${colW}px;
+      min-height:${colH}px;
+      flex-shrink:0;
+    ">`;
+    html += page.left.map(item => renderPreviewItem(item)).join('');
+    html += `</div>`;
+
+    // Column gutter (center line)
+    if (colGapPx > 0) {
+      html += `<div style="width:${colGapPx}px;flex-shrink:0;background:transparent;border-left:2px solid #e0d8c8;"></div>`;
+    }
+
+    // Right column
+    html += `<div class="preview-col" style="
+      width:${colW}px;
+      min-height:${colH}px;
+      flex-shrink:0;
+      border-left:none;
+    ">`;
+    html += page.right.map(item => renderPreviewItem(item)).join('');
+    html += `</div>`;
+
+    html += `</div>`; // end preview-frame
+
+    // Page number
+    html += `<div class="page-number">— 第 ${pi + 1} 页 —</div>`;
+    html += `</div>`; // end preview-page
+  });
+
+  container.innerHTML = html;
+
+  // Reset zoom slider since we use responsive layout now
+  updateZoom(100);
+}
+
+function paginateContent(items, colW, colH, scale) {
+  const pages = [];
+  let currentPage = { left: [], right: [] };
+  let currentCol = 'left';
+  let colY = 0;  // current Y position within column
+
+  // Estimate line height in preview px
+  const lineHeight = 13 * 1.8 * (scale / 1.33);  // ~23.4px per line at 100%
+
+  for (const item of items) {
+    // Estimate height of this item
+    const itemHeight = estimateItemHeight(item, colW, lineHeight);
+
+    // Check if it fits in current column
+    if (colY + itemHeight > colH) {
+      if (currentCol === 'left') {
+        // Move to right column
+        currentCol = 'right';
+        colY = 0;
+        // Re-check if item fits in right column
+        if (colY + itemHeight > colH) {
+          // Item doesn't fit in right column either → new page
+          pages.push(currentPage);
+          currentPage = { left: [], right: [] };
+          currentCol = 'left';
+          colY = 0;
+        }
+      } else {
+        // Right column full → new page
+        pages.push(currentPage);
+        currentPage = { left: [], right: [] };
+        currentCol = 'left';
+        colY = 0;
+      }
+    }
+
+    currentPage[currentCol].push(item);
+    colY += itemHeight;
+  }
+
+  // Don't forget last page
+  if (currentPage.left.length > 0 || currentPage.right.length > 0) {
+    pages.push(currentPage);
+  }
+
+  return pages.length > 0 ? pages : [{ left: [], right: [] }];
+}
+
+function estimateItemHeight(item, colW, lineHeight) {
+  if (item.text === '') return lineHeight * 0.5;
+
+  // Count effective characters (strip markers)
+  const cleanText = item.text
+    .replace(/\/\/Cmd\+\\\\\/\//g, '')
+    .replace(/\/\/Shift\+Tab\/\//g, '')
+    .replace(/\/\/Shift\+Cmd\+M\/\//g, '')
+    .replace(/\/\/图片:\/{3}.+?\//g, '');
+
+  // Estimate chars per line (rough: colW / (fontSize * 0.6))
+  const charsPerLine = Math.max(1, Math.floor(colW / (13 * 0.6)));
+  const lines = Math.ceil(cleanText.length / charsPerLine) || 1;
+
+  // Style-based height adjustments
+  let multiplier = 1;
+  const style = item.style;
+  if (style === '【第一单元】' || style === '第1周' || style === '一、' || style === '二、' || style === '三、' || style === '四、') {
+    multiplier = 1.5;
+  } else if (style === '通知') {
+    multiplier = 0.9;
+  }
+
+  // Image placeholder
+  if (item.text.includes('//图片:///')) {
+    return lineHeight * 4;
+  }
+
+  return lineHeight * lines * multiplier + 2;
+}
+
+function renderPreviewItem(item) {
+  const text = item.text;
+  const style = item.style;
+
+  // Empty item → spacing
+  if (text === '') {
+    return `<div class="pv-item pv-empty"></div>`;
+  }
+
+  // Determine CSS class based on style
+  let cssClass = 'pv-style-default';
+  if (style === '第1周' || style === '第2周' || style === '第3周') cssClass = 'pv-style-week';
+  else if (style === '【第一单元】' || style === '【第二单元】' || style === '【第三单元】') cssClass = 'pv-style-unit';
+  else if (style === '时间：') cssClass = 'pv-style-time';
+  else if (style === '一、' || style === '二、' || style === '三、' || style === '四、') cssClass = 'pv-style-section';
+  else if (style === '题选项') cssClass = 'pv-style-question';
+  else if (style === '缩进0') cssClass = 'pv-style-option';
+  else if (style === '通知') cssClass = 'pv-style-notice';
+
+  // Render text with markers
+  let rendered = renderMarkedText(text, style);
+
+  // Style badge (subtle indicator)
+  let badge = '';
+  if (style && style !== '缩进0') {
+    const badgeColors = {
+      '【第一单元】': '#6c8cff', '【第二单元】': '#6c8cff', '【第三单元】': '#6c8cff',
+      '时间：': '#f59e0b', '一、': '#34d399', '二、': '#34d399', '三、': '#34d399', '四、': '#34d399',
+      '题选项': '#f87171', '通知': '#a78bfa',
+      '第1周': '#ec4899', '第2周': '#ec4899', '第3周': '#ec4899',
+    };
+    const color = badgeColors[style] || '#888';
+    badge = `<span class="pv-style-badge" style="background:${color}22;color:${color};">${escapeHtml(style)}</span>`;
+  }
+
+  return `<div class="pv-item ${cssClass}">${rendered}${badge}</div>`;
+}
+
+function renderMarkedText(text, style) {
+  // Replace special markers with HTML equivalents
+  let html = escapeHtml(text);
+
+  // Image markers
+  html = html.replace(/\/\/图片:\/{3}(.+?)\/\//g, (match, path) => {
+    const fname = path.split('/').pop() || 'image';
+    return `<span class="pv-img-placeholder full" title="${escapeHtml(path)}">图片: ${escapeHtml(fname)}</span>`;
+  });
+
+  // Indent to Here
+  html = html.replace(/\/\/Cmd\+\\\/\//g, '<span class="pv-indent-here"></span>');
+
+  // Right Indent Tab → align right in preview
+  html = html.replace(/\/\/Shift\+Tab\/\//g, '<span style="float:right;margin-right:8px;"></span>');
+
+  // Em Space
+  html = html.replace(/\/\/Shift\+Cmd\+M\/\//g, '&emsp;');
+
+  // Style-specific formatting
+  if (style === '通知') {
+    html = html.replace(/^通知$/, '<strong>通知</strong>');
+  }
+
+  // Underline for answer blanks: （　　）→ （＿＿＿）
+  html = html.replace(/（\s*）/g, '（<span class="pv-rubric">&nbsp;&nbsp;&nbsp;&nbsp;</span>）');
+
+  return html;
+}
+</script>
+
+</body>
+</html>
