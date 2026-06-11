@@ -1180,7 +1180,7 @@ function generateJSX(items) {
 // 0. 配置区 —— 集中修改这里即可适配不同试卷
 // ---------------------------------------------------------------------------
 var CONFIG = {
-    // 模板文件路径（相对脚本位置或绝对路径）
+    // 模板文件路径（回退路径：如果用户取消弹窗选择，则使用此路径）
     templatePath: "${escapeJS(cfg.templatePath)}",
 
     // 文本框参数（单位：pt）：每页左栏 / 右栏（同页双栏，内容从左栏流入右栏）
@@ -1342,14 +1342,31 @@ function applyStyle(story, styleName) {
 // ---------------------------------------------------------------------------
 
 function main() {
-    // --- 3.1 打开模板 ---
+    // --- 3.1 打开模板（优先弹窗选择，用户取消时回退到 CONFIG 路径）---
     var doc;
+    var tmplFile;
     try {
-        var tmplFile = File(CONFIG.templatePath);
+        // 弹窗让用户选择 .indd 模板文件
+        tmplFile = File.openDialog(
+            "请选择排版模板文件 (.indd)",
+            "*.indd",
+            false
+        );
+
+        // 用户取消了选择，回退到 CONFIG.templatePath
+        if (!tmplFile) {
+            tmplFile = File(CONFIG.templatePath);
+            if (!tmplFile.exists) {
+                alert("未选择模板文件，且默认路径也无效:\\n" + CONFIG.templatePath, "错误");
+                return;
+            }
+        }
+
         if (!tmplFile.exists) {
-            alert("模板文件不存在:\\n" + CONFIG.templatePath, "错误");
+            alert("模板文件不存在:\\n" + tmplFile.fsName, "错误");
             return;
         }
+
         doc = app.open(tmplFile);
     } catch (e) {
         alert("打开模板失败:\\n" + e.toString(), "错误");
