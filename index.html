@@ -567,6 +567,7 @@
           <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">选择文件</button>
           <button class="btn btn-outline" onclick="loadSample('效果-专项卷二.md')" style="font-size:12px;">📄 示例一</button>
           <button class="btn btn-outline" onclick="loadSample('周末小测卷语文四年级.md')" style="font-size:12px;">📄 示例二</button>
+          <button class="btn btn-outline" onclick="loadSample('汉字与词语专项训练卷.md')" style="font-size:12px;">📄 示例三</button>
         </div>
         <input type="file" id="fileInput" accept=".md,.txt,.markdown,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="handleFileSelect(this.files[0])">
       </div>
@@ -735,6 +736,14 @@
     <li>使用 <code>[右对齐]</code> 标记 Right Indent Tab 位置</li>
     <li>纯文本行会自动按关键词匹配段落样式</li>
   </ul>
+</div>
+
+<div class="instructions" style="max-width:1400px;margin:0 auto 32px;padding:16px 24px;">
+  <strong style="font-size:13px;">📦 已生成 JSX 脚本</strong>
+  <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="汉字与词语专项训练卷_排版脚本.jsx" download class="btn btn-outline" style="text-decoration:none;font-size:12px;">⬇ 汉字与词语专项训练卷.jsx</a>
+    <a href="2026-07-09.md" class="btn btn-outline" style="text-decoration:none;font-size:12px;">📝 工作日志 (2026-07-09)</a>
+  </div>
 </div>
 
 <script>
