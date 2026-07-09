@@ -595,6 +595,16 @@
       </div>
 
       <div class="config-grid">
+        <div class="config-group" style="grid-column: span 2;">
+          <label>坐标单位</label>
+          <select id="cfgUnit" onchange="updateUnitLabels()" style="width:100%;padding:8px 10px;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:8px;">
+            <option value="pt">pt（点）</option>
+            <option value="mm">mm（毫米）</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="config-grid">
         <div class="config-group">
           <label>左栏 X <span class="unit">(pt)</span></label>
           <input type="number" id="cfgLeftX" value="99.2" step="0.1">
@@ -734,6 +744,7 @@
 const BUILTIN_PRESETS = {
   '三上-专项卷': {
     templatePath: '',
+    unit: 'pt',
     leftX: 99.2, leftY: 68.0, leftW: 496.1, leftH: 714.3,
     rightX: 652.0, rightY: 68.0, rightW: 496.1, rightH: 714.3,
     defaultStyle: '基准',
@@ -741,6 +752,7 @@ const BUILTIN_PRESETS = {
   },
   '四上-小测卷': {
     templatePath: '',
+    unit: 'mm',
     leftX: 35, leftY: 24, leftW: 175, leftH: 252,
     rightX: 230, rightY: 24, rightW: 175, rightH: 252,
     defaultStyle: '基准',
@@ -748,6 +760,7 @@ const BUILTIN_PRESETS = {
   },
   '三上-期末试卷': {
     templatePath: '',
+    unit: 'mm',
     leftX: 15, leftY: 14, leftW: 185, leftH: 252.5,
     rightX: 220, rightY: 27, rightW: 185, rightH: 240.5,
     defaultStyle: '基准',
@@ -781,6 +794,7 @@ function loadPreset(name) {
   if (!p) return;
 
   document.getElementById('cfgTemplatePath').value = p.templatePath;
+  document.getElementById('cfgUnit').value = p.unit || 'pt';
   document.getElementById('cfgLeftX').value = p.leftX;
   document.getElementById('cfgLeftY').value = p.leftY;
   document.getElementById('cfgLeftW').value = p.leftW;
@@ -792,12 +806,21 @@ function loadPreset(name) {
   document.getElementById('cfgDefaultStyle').value = p.defaultStyle;
   document.getElementById('cfgScriptTitle').value = p.scriptTitle;
 
+  updateUnitLabels();
   showToast('已加载预设: ' + name, 'success');
+}
+
+function updateUnitLabels() {
+  const unit = document.getElementById('cfgUnit').value || 'pt';
+  document.querySelectorAll('.config-group .unit').forEach(el => {
+    el.textContent = '(' + unit + ')';
+  });
 }
 
 function getCurrentConfig() {
   return {
     templatePath: document.getElementById('cfgTemplatePath').value,
+    unit: document.getElementById('cfgUnit').value || 'pt',
     leftX: parseFloat(document.getElementById('cfgLeftX').value) || 0,
     leftY: parseFloat(document.getElementById('cfgLeftY').value) || 0,
     leftW: parseFloat(document.getElementById('cfgLeftW').value) || 0,
@@ -907,6 +930,7 @@ function escapeHtml(str) {
 
 renderStyleMappings();
 populatePresetSelect();
+updateUnitLabels();
 
 // ============================================================
 // AI Toggle
@@ -1190,7 +1214,10 @@ var CONFIG = {
     // 模板文件路径（可选回退路径：如果用户取消弹窗选择且此路径有效，则使用此路径）
     templatePath: "${escapeJS(cfg.templatePath)}",
 
-    // 文本框参数（单位：pt）：每页左栏 / 右栏（同页双栏，内容从左栏流入右栏）
+    // 坐标单位（pt 或 mm）。脚本会在创建文本框前把文档设为该单位。
+    unit: "${escapeJS(cfg.unit || 'pt')}",
+
+    // 文本框参数（单位见上）：每页左栏 / 右栏（同页双栏，内容从左栏流入右栏）
     frameLeft:  { x: ${cfg.leftX},  y: ${cfg.leftY}, w: ${cfg.leftW}, h: ${cfg.leftH}, label: "左栏" },
     frameRight: { x: ${cfg.rightX}, y: ${cfg.rightY}, w: ${cfg.rightW}, h: ${cfg.rightH}, label: "右栏" },
 
@@ -1349,9 +1376,13 @@ function applyStyle(story, styleName) {
 // ---------------------------------------------------------------------------
 
 function main() {
+    // --- 3.0 初始化变量 ---
+    var doc = null;
+    var tmplFile = null;
+    var originalHUnits = null;
+    var originalVUnits = null;
+
     // --- 3.1 打开模板（优先弹窗选择，用户取消时回退到 CONFIG 路径）---
-    var doc;
-    var tmplFile;
     try {
         // 弹窗让用户选择模板文件（支持 .indd 和 .idml）
         tmplFile = File.openDialog(
@@ -1381,32 +1412,41 @@ function main() {
         }
 
         doc = app.open(tmplFile);
+
+        // 设置单位为 CONFIG.unit
+        var targetUnit = (CONFIG.unit === "mm") ? MeasurementUnits.MILLIMETERS : MeasurementUnits.POINTS;
+        originalHUnits = doc.viewPreferences.horizontalMeasurementUnits;
+        originalVUnits = doc.viewPreferences.verticalMeasurementUnits;
+        doc.viewPreferences.horizontalMeasurementUnits = targetUnit;
+        doc.viewPreferences.verticalMeasurementUnits = targetUnit;
     } catch (e) {
-        alert("打开模板失败:\\n" + e.toString(), "错误");
+        alert("打开模板失败:\\n" + e.toString() + "\\n行号：" + e.line, "错误");
         return;
     }
 
-    // --- 3.2 页面尺寸检测（单位均为 pt） ---
-    var pageDimsPt = getPageDimensionsPt(doc);
-    var pageW_pt = pageDimsPt.width;
-    var pageH_pt = pageDimsPt.height;
+    try {
+    // --- 3.2 页面尺寸检测（单位与 CONFIG.unit 一致） ---
+    var pageDims = getPageDimensions(doc);
+    var pageW = pageDims.width;
+    var pageH = pageDims.height;
 
     var needW = Math.max(CONFIG.frameLeft.x + CONFIG.frameLeft.w, CONFIG.frameRight.x + CONFIG.frameRight.w);
     var needH = Math.max(CONFIG.frameLeft.y + CONFIG.frameLeft.h, CONFIG.frameRight.y + CONFIG.frameRight.h);
 
-    if (pageW_pt < needW || pageH_pt < needH) {
+    if (pageW < needW || pageH < needH) {
         var warnLines = [];
-        if (pageW_pt < needW) warnLines.push("· 页面宽度不足: 当前 " + pageW_pt.toFixed(1) + "pt, 需要≥" + needW.toFixed(1) + "pt");
-        if (pageH_pt < needH) warnLines.push("· 页面高度不足: 当前 " + pageH_pt.toFixed(1) + "pt, 需要≥" + needH.toFixed(1) + "pt");
+        if (pageW < needW) warnLines.push("· 页面宽度不足: 当前 " + pageW.toFixed(1) + ", 需要≥" + needW.toFixed(1));
+        if (pageH < needH) warnLines.push("· 页面高度不足: 当前 " + pageH.toFixed(1) + ", 需要≥" + needH.toFixed(1));
 
         var warnMsg = "⚠ 页面尺寸与文本框配置不匹配！\\n\\n" +
-                      "页面实测: " + pageW_pt.toFixed(1) + "pt × " + pageH_pt.toFixed(1) + "pt\\n" +
-                      "帧需求: 宽≥" + needW.toFixed(0) + "pt, 高≥" + needH.toFixed(0) + "pt" +
-                      " (左:" + (CONFIG.frameLeft.x + CONFIG.frameLeft.w).toFixed(0) + "pt, 右:" + (CONFIG.frameRight.x + CONFIG.frameRight.w).toFixed(0) + "pt)\\n\\n" +
+                      "页面实测: " + pageW.toFixed(1) + " × " + pageH.toFixed(1) + " (" + CONFIG.unit + ")\\n" +
+                      "帧需求: 宽≥" + needW.toFixed(0) + ", 高≥" + needH.toFixed(0) + " (" + CONFIG.unit + ")" +
+                      " (左:" + (CONFIG.frameLeft.x + CONFIG.frameLeft.w).toFixed(0) + ", 右:" + (CONFIG.frameRight.x + CONFIG.frameRight.w).toFixed(0) + ") (" + CONFIG.unit + ")\n\n" +
                       warnLines.join("\\n") + "\\n\\n" +
                       "建议:\\n" +
                       "  1. 检查模板页面尺寸是否足够容纳左右两栏\\n" +
-                      "  2. 或调整 CONFIG 中的 frameLeft/frameRight 坐标\\n\\n" +
+                      "  2. 或调整 CONFIG 中的 frameLeft/frameRight 坐标\\n" +
+                      "  3. 确认 CONFIG.unit 与模板当前单位一致\\n\\n" +
                       "是否继续运行？（文本框可能超出页面边界）";
         if (!confirm(warnMsg)) {
             doc.close(SaveOptions.NO);
@@ -1473,12 +1513,23 @@ function main() {
         "试卷：${escapeJS(title)}\\n" +
         "内容条目：" + contentFlow.length + " 条\\n" +
         "总页数：" + doc.pages.length + " 页\\n" +
-        "页面尺寸：" + pageW_pt.toFixed(0) + "×" + pageH_pt.toFixed(0) + "pt\\n" +
-        "文本框：" + CONFIG.frameLeft.w.toFixed(0) + "×" + CONFIG.frameLeft.h.toFixed(0) + "pt" +
-        "（左:" + CONFIG.frameLeft.x.toFixed(0) + "pt / 右:" + CONFIG.frameRight.x.toFixed(0) + "pt）\\n\\n" +
+        "页面尺寸：" + pageW.toFixed(0) + "×" + pageH.toFixed(0) + " (" + CONFIG.unit + ")\\n" +
+        "文本框：" + CONFIG.frameLeft.w.toFixed(0) + "×" + CONFIG.frameLeft.h.toFixed(0) + " (" + CONFIG.unit + ")" +
+        "（左:" + CONFIG.frameLeft.x.toFixed(0) + " / 右:" + CONFIG.frameRight.x.toFixed(0) + "）\\n\\n" +
         "请保存文档。",
         "完成"
     );
+    } catch (e) {
+        alert("❌ 排版过程中出错：\n" + e.toString() + "\n\n行号：" + e.line + "\n\n请检查：\n1. 模板页面尺寸是否足够\n2. 段落样式名称是否正确\n3. CONFIG 中的坐标和单位是否匹配模板", "错误");
+    } finally {
+        // --- 3.9 恢复文档原始测量单位 ---
+        if (doc && doc.isValid) {
+            try {
+                doc.viewPreferences.horizontalMeasurementUnits = originalHUnits;
+                doc.viewPreferences.verticalMeasurementUnits = originalVUnits;
+            } catch (e) { /* 忽略恢复错误 */ }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1490,7 +1541,7 @@ var POSITION_TOLERANCE = 5;
 function mmToPt(mm) { return mm * 2.834645669; }
 function ptToMm(pt) { return pt / 2.834645669; }
 
-function getPageDimensionsPt(doc) {
+function getPageDimensions(doc) {
     var page = doc.pages[0];
     var testRect = page.rectangles.add();
     testRect.geometricBounds = [0, 0, 99999, 99999];
