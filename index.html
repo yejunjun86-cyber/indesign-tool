@@ -930,6 +930,14 @@ function escapeHtml(str) {
 
 renderStyleMappings();
 populatePresetSelect();
+
+// 默认加载「智能期末试卷语文三年级-模板.idml」预设（mm 单位）
+const DEFAULT_PRESET = '智能期末试卷语文三年级-模板.idml';
+if (BUILTIN_PRESETS[DEFAULT_PRESET]) {
+  document.getElementById('presetSelect').value = DEFAULT_PRESET;
+  loadPreset(DEFAULT_PRESET);
+}
+
 updateUnitLabels();
 
 // ============================================================
