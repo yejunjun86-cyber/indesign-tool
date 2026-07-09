@@ -590,8 +590,8 @@
       </div>
 
       <div class="config-group">
-        <label>模板文件路径</label>
-        <input type="text" id="cfgTemplatePath" value="/Users/tal/Desktop/叶珺珺/2026/4月/AI自动化排版/语文周末专项卷-三上-专项卷.indd" placeholder=".indd 模板绝对路径">
+        <label>模板文件路径（.indd / .idml）</label>
+        <input type="text" id="cfgTemplatePath" value="" placeholder=".indd / .idml 模板绝对路径（留空则运行时弹窗选择）">
       </div>
 
       <div class="config-grid">
@@ -733,18 +733,25 @@
 // ============================================================
 const BUILTIN_PRESETS = {
   '三上-专项卷': {
-    templatePath: '/Users/tal/Desktop/叶珺珺/2026/4月/AI自动化排版/语文周末专项卷-三上-专项卷.indd',
+    templatePath: '',
     leftX: 99.2, leftY: 68.0, leftW: 496.1, leftH: 714.3,
     rightX: 652.0, rightY: 68.0, rightW: 496.1, rightH: 714.3,
     defaultStyle: '基准',
     scriptTitle: '自动排版'
   },
   '四上-小测卷': {
-    templatePath: '/Users/tal/Desktop/叶珺珺/2026/4月/AI自动化排版/语文周末小测卷-四上.indd',
+    templatePath: '',
     leftX: 35, leftY: 24, leftW: 175, leftH: 252,
     rightX: 230, rightY: 24, rightW: 175, rightH: 252,
     defaultStyle: '基准',
     scriptTitle: '四上小测卷'
+  },
+  '三上-期末试卷': {
+    templatePath: '',
+    leftX: 15, leftY: 14, leftW: 185, leftH: 252.5,
+    rightX: 220, rightY: 27, rightW: 185, rightH: 240.5,
+    defaultStyle: '基准',
+    scriptTitle: '三上期末试卷'
   }
 };
 
@@ -1180,7 +1187,7 @@ function generateJSX(items) {
 // 0. 配置区 —— 集中修改这里即可适配不同试卷
 // ---------------------------------------------------------------------------
 var CONFIG = {
-    // 模板文件路径（回退路径：如果用户取消弹窗选择，则使用此路径）
+    // 模板文件路径（可选回退路径：如果用户取消弹窗选择且此路径有效，则使用此路径）
     templatePath: "${escapeJS(cfg.templatePath)}",
 
     // 文本框参数（单位：pt）：每页左栏 / 右栏（同页双栏，内容从左栏流入右栏）
@@ -1346,18 +1353,24 @@ function main() {
     var doc;
     var tmplFile;
     try {
-        // 弹窗让用户选择 .indd 模板文件
+        // 弹窗让用户选择模板文件（支持 .indd 和 .idml）
         tmplFile = File.openDialog(
-            "请选择排版模板文件 (.indd)",
-            "*.indd",
+            "请选择排版模板文件 (.indd / .idml)",
+            function(f) { return f instanceof Folder || /\.indd$|\.idml$/i.test(f.name); },
             false
         );
 
-        // 用户取消了选择，回退到 CONFIG.templatePath
+        // 用户取消了选择
         if (!tmplFile) {
-            tmplFile = File(CONFIG.templatePath);
-            if (!tmplFile.exists) {
-                alert("未选择模板文件，且默认路径也无效:\\n" + CONFIG.templatePath, "错误");
+            // 如果 CONFIG.templatePath 有值，尝试使用回退路径
+            if (CONFIG.templatePath && CONFIG.templatePath.length > 0) {
+                tmplFile = File(CONFIG.templatePath);
+                if (!tmplFile.exists) {
+                    alert("未选择模板文件，且配置路径无效:\\n" + CONFIG.templatePath + "\\n\\n请重新运行脚本并在弹窗中选择模板文件。", "错误");
+                    return;
+                }
+            } else {
+                alert("未选择模板文件。\\n\\n请在弹窗中选择 .indd 或 .idml 模板文件后重试。", "错误");
                 return;
             }
         }
